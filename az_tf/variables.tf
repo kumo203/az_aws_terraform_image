@@ -2,7 +2,7 @@
 variable "resource_prefix" {
   description = "Prefix applied to the name of every top-level resource"
   type        = string
-  default     = "ai-prj-sample20260803"
+  default     = "ai-prj-sample"
 }
 
 variable "location" {
