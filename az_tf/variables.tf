@@ -11,6 +11,20 @@ variable "location" {
   default     = "eastus2"
 }
 
+# The following two variables are produced by `terraform output` in bootstrap/
+# after `terraform apply` there; copy them into terraform.tfvars before
+# applying this module. They have no default because a fresh value is
+# generated on every bootstrap apply.
+variable "resource_group_name" {
+  description = "Name of the shared resource group (bootstrap output: resource_group_name)"
+  type        = string
+}
+
+variable "name_suffix" {
+  description = "Shared naming suffix used across this module's resources (bootstrap output: name_suffix)"
+  type        = string
+}
+
 variable "deployment_sku_name" {
   description = "SKU name applied to every model deployment"
   type        = string
