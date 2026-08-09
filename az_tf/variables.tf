@@ -52,6 +52,12 @@ variable "model_deployments" {
   }
 }
 
+variable "api_version" {
+  description = "Azure OpenAI REST API version (the `api-version` query parameter) Copilot's BYOM client must send on every request"
+  type        = string
+  default     = "2024-06-01"
+}
+
 variable "apim_sku_name" {
   description = "SKU (name_capacity) for the API Management gateway in front of the Foundry endpoint"
   type        = string
