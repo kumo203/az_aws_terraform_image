@@ -15,7 +15,16 @@ terraform {
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    resource_group {
+      # Azure auto-creates untracked resources in this RG as side effects of
+      # az_tf/'s Application Insights (a "Smart Detection" action group +
+      # alert rule) that Terraform never manages. Without this, destroying
+      # this resource group fails with "still contains Resources" even after
+      # every Terraform-managed resource inside it is gone.
+      prevent_deletion_if_contains_resources = false
+    }
+  }
 }
 
 data "azurerm_client_config" "current" {}

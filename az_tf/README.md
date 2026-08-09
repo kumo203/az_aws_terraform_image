@@ -72,10 +72,10 @@ cd ../bootstrap
 terraform destroy   # 最後にtfstate用インフラを消す
 ```
 
-bootstrapの`terraform destroy`は、RG内にTerraform管理外のリソースが残っていると**わざと失敗する**（`azurerm`プロバイダのデフォルト動作、`prevent_deletion_if_contains_resources = true`）。エラーメッセージに残存リソースの一覧が出るので、それを見て「消してよいか」を人間が判断してから、`az resource delete`で個別に消して`terraform destroy`をやり直す。「Application Insightsの自動生成リソース」の項を参照。この安全装置はあえて無効化していない。
+bootstrapの`terraform destroy`は、`prevent_deletion_if_contains_resources = false`によりRG内の管理外リソースをチェックせずAzure API側でRGごと削除する。「Application Insightsの自動生成リソース」の項を参照。
 
 ## 遭遇した詰まりどころ
 
 - **Cognitive Servicesの論理削除**: `terraform destroy`をTerraform経由で行わず、リソースグループ削除など外部から消すと、Cognitive Services（Foundry）アカウントは論理削除（soft-delete）状態で残る。同名で再作成しようとすると409 `FlagMustBeSetForRestore`エラーになるため、`az cognitiveservices account purge --location <loc> --resource-group <rg> --name <name>` で完全削除してから再apply。
-- **Application Insightsの自動生成リソース**: App Insightsを作成すると、Azureが`microsoft.insights/actiongroups`（Application Insights Smart Detection）と`microsoft.alertsmanagement/smartDetectorAlertRules`（Failure Anomalies）をTerraform管理外で自動生成する。これらがRG内に残っているとTerraformの安全装置でRG削除が失敗する（`the Resource Group still contains Resources`、エラー本文に対象リソースIDが列挙される）。これは意図的に残してある安全装置なので無効化しない。対処は都度: エラーに出た一覧（または`az resource list --resource-group <rg> -o table`と`terraform state list`の差分）を人間が確認し、不要と判断したものだけ`az resource delete --resource-group <rg> --resource-type <type> --name <name>`で消してから`terraform destroy`をやり直す。
+- **Application Insightsの自動生成リソース**: App Insightsを作成すると、Azureが`microsoft.insights/actiongroups`（Application Insights Smart Detection）と`microsoft.alertsmanagement/smartDetectorAlertRules`（Failure Anomalies）をTerraform管理外で自動生成する。これらがRG内に残っているとTerraformの安全装置でRG削除が失敗する（`the Resource Group still contains Resources`）。**対策済み**: `bootstrap/main.tf`の`provider "azurerm" { features { resource_group { prevent_deletion_if_contains_resources = false } } }` で、この安全装置自体を無効化してある（RGはAzure API側で中身ごと削除される）。RG削除前に管理外リソースを確認したい場合は、`az resource list --resource-group <rg> -o table`と`terraform state list`を突き合わせて事前に目視すること。
 - **APIM Consumption tierのポリシー制約**: `rate-limit-by-key` / `quota` / `quota-by-key` はConsumption tierでは一切使えない（400 `ValidationError`）。プレーンな`rate-limit`（Product scopeかつ`subscription_required = true`であれば実質サブスクリプション単位）で代替する必要がある。
