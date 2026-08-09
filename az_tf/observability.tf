@@ -36,4 +36,30 @@ resource "azurerm_api_management_diagnostic" "appinsights" {
   api_management_logger_id = azurerm_api_management_logger.appinsights[0].id
   sampling_percentage      = 100
   verbosity                = "information"
+
+  # Logs the client-facing prompt/response bodies (per-subscription/team
+  # attribution comes for free — APIM gateway logs always include the
+  # subscription ID). 8192 bytes is the hard Azure maximum per field. Only
+  # frontend_* is set: backend_request/response would duplicate this same
+  # content (the policy forwards the body unchanged) while pushing the
+  # combined log entry closer to the 32KB total cap, past which APIM drops
+  # the body/trace entirely instead of truncating it.
+  frontend_request {
+    body_bytes = 8192
+
+    # Preserves APIM's own default (implicit when this block is omitted
+    # entirely): the API accepts api-key as a query param too
+    # (subscription_key_parameter_names.query in api_management_api.tf), so
+    # query params must stay masked or the key would appear in plaintext logs.
+    data_masking {
+      query_params {
+        mode  = "Hide"
+        value = "*"
+      }
+    }
+  }
+
+  frontend_response {
+    body_bytes = 8192
+  }
 }
