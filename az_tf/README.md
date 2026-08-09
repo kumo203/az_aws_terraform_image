@@ -57,6 +57,22 @@ terraform apply
 
 APIM（Consumption tier）の作成には数分かかる。
 
+## GitHub Copilot CLIでの利用
+
+```bash
+GATEWAY=$(terraform output -raw apim_gateway_url)
+KEY=$(terraform output -json apim_subscription_keys | python3 -c "import json,sys; print(json.load(sys.stdin)['team-alpha'])")
+
+export COPILOT_PROVIDER_BASE_URL="$GATEWAY"
+export COPILOT_PROVIDER_TYPE=azure
+export COPILOT_PROVIDER_API_KEY="$KEY"
+export COPILOT_MODEL="gpt-5.6-luna"   # gpt-5.6-terra / gpt-5.6-sol にも変更可
+
+copilot -p "hello" --allow-all-tools
+```
+
+PowerShell用に整形済みのコマンドは `terraform output -json copilot_cli_powershell` から取得できる（teamごと、sensitive）。BYOK設定を入れるとそのセッションはGitHubホスト型モデルには繋がらなくなる点に注意。
+
 ## 権限について
 
 `use_azuread_auth = true` のため、tfstateを操作する人/サービスプリンシパルには対象Storage Accountの `Storage Blob Data Contributor` ロールが必要（`bootstrap/main.tf`の`azurerm_role_assignment.state_access`で、bootstrap適用時点のサインイン中ユーザーに自動付与される）。別ユーザーが運用する場合は追加のロール割り当てが必要。
@@ -79,3 +95,4 @@ bootstrapの`terraform destroy`は、RG内にTerraform管理外のリソース�
 - **Cognitive Servicesの論理削除**: `terraform destroy`をTerraform経由で行わず、リソースグループ削除など外部から消すと、Cognitive Services（Foundry）アカウントは論理削除（soft-delete）状態で残る。同名で再作成しようとすると409 `FlagMustBeSetForRestore`エラーになるため、`az cognitiveservices account purge --location <loc> --resource-group <rg> --name <name>` で完全削除してから再apply。
 - **Application Insightsの自動生成リソース**: App Insightsを作成すると、Azureが`microsoft.insights/actiongroups`（Application Insights Smart Detection）と`microsoft.alertsmanagement/smartDetectorAlertRules`（Failure Anomalies）をTerraform管理外で自動生成する。これらがRG内に残っているとTerraformの安全装置でRG削除が失敗する（`the Resource Group still contains Resources`、エラー本文に対象リソースIDが列挙される）。これは意図的に残してある安全装置なので無効化しない。対処は都度: エラーに出た一覧（または`az resource list --resource-group <rg> -o table`と`terraform state list`の差分）を人間が確認し、不要と判断したものだけ`az resource delete --resource-group <rg> --resource-type <type> --name <name>`で消してから`terraform destroy`をやり直す。
 - **APIM Consumption tierのポリシー制約**: `rate-limit-by-key` / `quota` / `quota-by-key` はConsumption tierでは一切使えない（400 `ValidationError`）。プレーンな`rate-limit`（Product scopeかつ`subscription_required = true`であれば実質サブスクリプション単位）で代替する必要がある。
+- **GitHub Copilot CLIは`/openai/deployments/{id}/...`パスを使わない**: `COPILOT_PROVIDER_TYPE=azure`のとき、CLIは`COPILOT_PROVIDER_BASE_URL`に指定したデプロイパスを無視し、常に`{host}/openai/v1/chat/completions`（モデル名はリクエストボディの`model`フィールド）を呼ぶ（`copilot --log-level debug`で確認可能）。`api_management_api.tf`に`/openai/v1/chat/completions`・`/openai/v1/embeddings`のoperationを用意していないと404 `Model not found`になる。副次効果として、この方式のおかげで`COPILOT_PROVIDER_BASE_URL`はデプロイ名を含まないゲートウェイURLだけでよく、`COPILOT_MODEL`を変えるだけでモデルを切り替えられる（[#4](../../issues/4)）。
