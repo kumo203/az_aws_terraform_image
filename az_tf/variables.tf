@@ -37,3 +37,49 @@ variable "model_deployments" {
     "gpt-5.6-sol"   = { version = "2026-07-09" }
   }
 }
+
+variable "apim_sku_name" {
+  description = "SKU (name_capacity) for the API Management gateway in front of the Foundry endpoint"
+  type        = string
+  default     = "Consumption_0"
+}
+
+variable "apim_publisher_name" {
+  description = "Publisher name shown in the APIM developer portal / used for service notifications"
+  type        = string
+  default     = "AI Platform Team"
+}
+
+variable "apim_publisher_email" {
+  description = "Publisher email for APIM service notifications; override with a real distribution list before applying"
+  type        = string
+  default     = "aiops@example.com"
+}
+
+variable "enable_apim_diagnostics" {
+  description = "Whether to provision Log Analytics + Application Insights and wire APIM diagnostics to them"
+  type        = bool
+  default     = true
+}
+
+# Per-team/consumer onboarding for the Copilot APIM gateway. Each entry gets its
+# own APIM product, subscription key, and rate-limit policy so no single team
+# can exhaust the shared model deployment capacity. Note: the Consumption SKU
+# rejects rate-limit-by-key/quota/quota-by-key outright, so only a plain
+# per-subscription rate-limit is enforced; revisit with a hard monthly quota
+# if/when apim_sku_name moves off Consumption.
+variable "copilot_teams" {
+  description = "Map of Copilot-consuming teams to their APIM product/subscription settings"
+  type = map(object({
+    display_name              = string
+    rate_limit_calls          = number
+    rate_limit_period_seconds = number
+  }))
+  default = {
+    "team-alpha" = {
+      display_name              = "Team Alpha"
+      rate_limit_calls          = 60
+      rate_limit_period_seconds = 60
+    }
+  }
+}
