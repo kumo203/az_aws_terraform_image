@@ -8,12 +8,11 @@ resource "aws_iam_user" "mantle_gateway" {
   name = "${var.resource_prefix}-${local.name_suffix}-mantle-gw"
 }
 
-# NOTE: the exact IAM action(s) required for a Bedrock API key to actually
-# call bedrock-mantle are not documented/confirmed as of writing (Mantle
-# calls are authorized by the bearer token itself, not necessarily by an
-# InvokeModel-style IAM action on this user). Starts broad; tighten once
-# verified against a real call (see aws_tf/README.md "遭遇した詰まりどころ"
-# once that verification happens).
+# Confirmed via a real 403 from bedrock-mantle: calls are authorized by
+# bedrock-mantle:CreateInference on the project resource, a separate action
+# namespace from bedrock:* (the classic Bedrock control/data-plane actions
+# don't cover it at all). "default" is the only project this account has;
+# see aws_tf/README.md "遭遇した詰まりどころ".
 resource "aws_iam_user_policy" "mantle_gateway" {
   name = "bedrock-mantle-access"
   user = aws_iam_user.mantle_gateway.name
@@ -23,7 +22,17 @@ resource "aws_iam_user_policy" "mantle_gateway" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = "bedrock:*"
+        Action   = "bedrock-mantle:CreateInference"
+        Resource = "arn:aws:bedrock-mantle:${var.region}:${data.aws_caller_identity.current.account_id}:project/default"
+      },
+      {
+        # This is the same "Action=CallWithBearerToken" seen encoded inside a
+        # short-term Bedrock API key's presigned URL — it authorizes the
+        # bearer-token exchange itself, separately from the inference call
+        # above. AWS's error for this one names Resource "*", not the
+        # project ARN, so it is not project-scoped.
+        Effect   = "Allow"
+        Action   = "bedrock-mantle:CallWithBearerToken"
         Resource = "*"
       }
     ]

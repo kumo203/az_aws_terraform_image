@@ -132,6 +132,14 @@ resource "aws_api_gateway_stage" "prod" {
   deployment_id = aws_api_gateway_deployment.gateway.id
   stage_name    = "prod"
 
+  # No attribute of aws_api_gateway_account.this is referenced above, so
+  # Terraform has no implicit ordering between them; without this, the stage
+  # can try to enable access logging before the account-level CloudWatch
+  # Logs role exists ("CloudWatch Logs role ARN must be set in account
+  # settings to enable logging") — the AWS analog of az_tf's time_sleep for
+  # AAD role-assignment propagation.
+  depends_on = [aws_api_gateway_account.this]
+
   dynamic "access_log_settings" {
     for_each = var.enable_gateway_logging ? [1] : []
     content {

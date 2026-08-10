@@ -76,3 +76,7 @@ print(response.output_text)
 - **`bedrock-runtime`ではなく`bedrock-mantle`**: 通常のBedrockモデル呼び出しの癖で`bedrock-runtime.<region>.amazonaws.com`にPOSTすると、パス自体は認識されるが認証エラー（`Authentication failed: Please make sure your API Key is valid`）になる。Grok 4.3はモデルカード上も`bedrock-runtime`/`Invoke`/`Converse`が非対応と明記されている。
 - **ホスト名は`.api.aws`ドメイン**: `bedrock-mantle.<region>.amazonaws.com`のような`.amazonaws.com`系のURLは存在しない。正しくは`bedrock-mantle.<region>.api.aws`。
 - **API keyの有効期限**: 短期キーは発行から12時間程度で失効し、`Bearer Token has expired`というエラーになる。期限切れかどうかは、まず新しいキーを発行して切り分ける。
+- **IAM経由でMantleを呼ぶ場合に必要な最小権限**: `aws_iam_service_specific_credential`で長期Bedrock API keyを発行したIAMユーザー（`aws_tf/bedrock_auth.tf`参照）には、`bedrock:*`のような通常のBedrockアクションではなく、`bedrock-mantle`という別のアクション名前空間の権限が必要。実際に叩いて判明した最小ポリシーは以下の2つ:
+  - `bedrock-mantle:CreateInference` on `arn:aws:bedrock-mantle:<region>:<account-id>:project/default`（推論呼び出し本体。コンソールのモデルカタログ画面に出てくる「Projects / default」のprojectを指す）
+  - `bedrock-mantle:CallWithBearerToken` on `*`（bearerトークンによる認証交換そのもの。短期API keyの中身に埋め込まれている`Action=CallWithBearerToken`と同じアクション。こちらはリソースが`*`でproject ARN指定は効かない）
+  どちらか一方だけでは`access_denied`になり、エラーメッセージに次に必要なアクション名がそのまま出るので、実際に呼んで得られたエラーから積み上げるのが早い。
