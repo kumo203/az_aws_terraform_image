@@ -1,0 +1,18 @@
+<policies>
+  <inbound>
+    <base />
+    <!-- Consumption SKU rejects rate-limit-by-key/quota/quota-by-key entirely; plain
+         rate-limit is accepted and, at product scope with subscription_required = true,
+         is already keyed per-subscription (i.e. per team) -->
+    <rate-limit calls="${rate_limit_calls}" renewal-period="${rate_limit_period}" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>
