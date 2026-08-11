@@ -10,6 +10,8 @@
 
 ### 1. bootstrapを適用
 
+`resource_prefix`のデフォルト値（`ai-prj-sample`）を変更する場合は、`bootstrap/`と`az_tf/`の両方で同じ値に揃えること（両モジュールが同一のリソースグループ名を組み立てるため）。デフォルトのまま使う場合は対応不要。
+
 ```bash
 cd bootstrap
 terraform init
@@ -47,6 +49,8 @@ name_suffix          = "<suffix>"
 
 `name_suffix` を`az_tf/backend.hcl`の`resource_group_name`と一致させること（bootstrapが作った同一のRGを指す）。
 
+`apim_publisher_email`（デフォルトは仮アドレス`aiops@example.com`、`az_tf/variables.tf`）も、実際に通知を受け取れる配信リストのメールアドレスに`terraform.tfvars`で上書きすること。
+
 ### 3. az_tfを適用
 
 ```bash
@@ -56,6 +60,13 @@ terraform apply
 ```
 
 APIM（Consumption tier）の作成には数分かかる。
+
+## 適用前に確認するTodo
+
+- **`apim_publisher_email`を実配信リストに変更**（`variables.tf:73-77`）— デフォルトの`aiops@example.com`のままだとAPIMのサービス通知が届かない。
+- **`model_deployments`のモデル名/バージョンを再確認**（`variables.tf:40-52`）— コード内コメントの通り、`az cognitiveservices account list-models`で現在のカタログと一致しているか確認する。カタログ側が更新されていると404等になる可能性がある。
+- **チームへの配布はAPIMサブスクリプションキーのみ**（`output.tf:23-26`）— `apim_subscription_keys`の値を配布し、Foundry本体の生キー（`foundry_endpoint`関連）は配らない。
+- **（任意）`copilot_teams`のレート制限方針を見直す**（`variables.tf:85-90`）— Consumption tierでは`rate-limit-by-key`/`quota`系が使えないため単純な`rate-limit`で代替している。`apim_sku_name`をConsumption以外に変更する場合は、チームごとの厳密なクォータ制御への見直しを検討する。
 
 ## GitHub Copilot CLIでの利用
 
@@ -71,7 +82,7 @@ export COPILOT_MODEL="gpt-5.6-luna"   # gpt-5.6-terra / gpt-5.6-sol にも変更
 copilot -p "hello" --allow-all-tools
 ```
 
-PowerShell用に整形済みのコマンドは `terraform output -json copilot_cli_powershell` から取得できる（teamごと、sensitive）。BYOK設定を入れるとそのセッションはGitHubホスト型モデルには繋がらなくなる点に注意。
+PowerShell用に整形済みのコマンド（BASE_URL/API_KEY/TYPE/MODELの4つ）は `terraform output -json copilot_cli_powershell` から取得できる（teamごと、sensitive）。BYOK設定を入れるとそのセッションはGitHubホスト型モデルには繋がらなくなる点に注意。
 
 ## 権限について
 
