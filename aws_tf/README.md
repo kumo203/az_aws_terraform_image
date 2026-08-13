@@ -1,0 +1,98 @@
+# Grok 4.3 (Amazon Bedrock Mantle) の呼び方
+
+## 概要
+
+`xai.grok-4.3` は他のBedrockモデルと違い、通常の `bedrock-runtime` エンドポイント（Invoke/Converse）では**呼べない**。専用の `bedrock-mantle` エンドポイント（OpenAI互換API）経由でのみアクセス可能。
+
+| 項目 | 値 |
+| --- | --- |
+| Model ID | `xai.grok-4.3` |
+| エンドポイント | `bedrock-mantle`（`bedrock-runtime`ではない） |
+| ホスト | `bedrock-mantle.<region>.api.aws`（`.amazonaws.com`ではなく`.api.aws`） |
+| 対応API | Chat Completions / Responses（Invoke・Converseは非対応） |
+| 対応リージョン | us-east-1, us-east-2, us-west-2（2026-08時点、Geo/Global Cross-Regionは未対応） |
+
+## 1. APIキーの発行
+
+Bedrockコンソール → 「API keys」から発行する（IAMのSigV4ではなく、この専用API keyで認証する）。
+
+```bash
+# https://console.aws.amazon.com/bedrock/home#/api-keys から発行し、以下のように設定
+export OPENAI_API_KEY="<発行したBedrock API key>"
+export OPENAI_BASE_URL="https://bedrock-mantle.us-east-1.api.aws/openai/v1"
+```
+
+短期キー（コンソールの「Generate short-term API key」）は発行から最大12時間で失効する。長期運用には「long-term API key」を使う。
+
+## 2. curlでの呼び出し
+
+```bash
+curl -s "$OPENAI_BASE_URL/chat/completions" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "xai.grok-4.3",
+    "messages": [
+      {"role": "user", "content": "Hello, this is a test message."}
+    ]
+  }'
+```
+
+## 3. OpenAI SDK (Python) での呼び出し
+
+```python
+from openai import OpenAI
+
+client = OpenAI()  # OPENAI_API_KEY / OPENAI_BASE_URL を環境変数から読む
+
+response = client.chat.completions.create(
+    model="xai.grok-4.3",
+    messages=[{"role": "user", "content": "Hello, this is a test message."}],
+)
+print(response.choices[0].message.content)
+```
+
+Responses APIを使う場合（ステートフルな会話管理、reasoning内容の暗号化保持に対応）:
+
+```python
+response = client.responses.create(
+    model="xai.grok-4.3",
+    input="Hello, this is a test message.",
+    reasoning={"effort": "low"},  # none / low(デフォルト) / medium / high
+)
+print(response.output_text)
+```
+
+## デフォルト値の違い（OpenAI標準と異なる点）
+
+- `temperature`: `0.7`（OpenAI標準は`1`）
+- `top_p`: `0.95`（OpenAI標準は`1`）
+- `max_completion_tokens`: `131072`
+- `reasoning.effort`: 常時有効。デフォルト`low`。無効化するには`{"effort": "none"}`を明示。
+- Chat Completions APIはreasoning tokenを返さない（reasoning内容を見たい場合はResponses APIを使う）。
+
+## 遭遇した詰まりどころ
+
+- **`bedrock-runtime`ではなく`bedrock-mantle`**: 通常のBedrockモデル呼び出しの癖で`bedrock-runtime.<region>.amazonaws.com`にPOSTすると、パス自体は認識されるが認証エラー（`Authentication failed: Please make sure your API Key is valid`）になる。Grok 4.3はモデルカード上も`bedrock-runtime`/`Invoke`/`Converse`が非対応と明記されている。
+- **ホスト名は`.api.aws`ドメイン**: `bedrock-mantle.<region>.amazonaws.com`のような`.amazonaws.com`系のURLは存在しない。正しくは`bedrock-mantle.<region>.api.aws`。
+- **API keyの有効期限**: 短期キーは発行から12時間程度で失効し、`Bearer Token has expired`というエラーになる。期限切れかどうかは、まず新しいキーを発行して切り分ける。
+- **IAM経由でMantleを呼ぶ場合に必要な最小権限**: `aws_iam_service_specific_credential`で長期Bedrock API keyを発行したIAMユーザー（`aws_tf/bedrock_auth.tf`参照）には、`bedrock:*`のような通常のBedrockアクションではなく、`bedrock-mantle`という別のアクション名前空間の権限が必要。実際に叩いて判明した最小ポリシーは以下の2つ:
+  - `bedrock-mantle:CreateInference` on `arn:aws:bedrock-mantle:<region>:<account-id>:project/default`（推論呼び出し本体。コンソールのモデルカタログ画面に出てくる「Projects / default」のprojectを指す）
+  - `bedrock-mantle:CallWithBearerToken` on `*`（bearerトークンによる認証交換そのもの。短期API keyの中身に埋め込まれている`Action=CallWithBearerToken`と同じアクション。こちらはリソースが`*`でproject ARN指定は効かない）
+  どちらか一方だけでは`access_denied`になり、エラーメッセージに次に必要なアクション名がそのまま出るので、実際に呼んで得られたエラーから積み上げるのが早い。
+- **`aws_bootstrap`のS3バケットは中身が空でないとdestroyできない**: `aws_tf`側から`terraform apply`すると、tfstate（`aws_tf.tfstate`）が`aws_bootstrap`のS3バケットに書き込まれる。バージョニングを有効にしているため、apply/planを繰り返すたびにオブジェクトのバージョンが積み上がる。`aws_bootstrap`を`terraform destroy`すると、バケットに（バージョン込みで）オブジェクトが残っているため`BucketNotEmpty`で失敗する。Azureのstorage accountと違い、S3はバケット内にオブジェクト/バージョンが1つでも残っていると削除を拒否する仕様のため。`force_destroy = true`を付ければ自動化できるが、汎用のバケット設定としては強すぎる（意図せず中身ごと消える）ため、あえて付けていない。destroy時は先に全バージョンを空にしてから`aws_bootstrap`を消す。
+
+  ```bash
+  BUCKET=$(cd aws_bootstrap && terraform output -raw state_bucket_name)
+  aws s3api list-object-versions --bucket "$BUCKET" --output json \
+    | python3 -c "
+  import json, sys
+  d = json.load(sys.stdin)
+  objs = [{'Key': v['Key'], 'VersionId': v['VersionId']} for v in d.get('Versions', []) + d.get('DeleteMarkers', [])]
+  print(json.dumps({'Objects': objs, 'Quiet': True}))
+  " > /tmp/delete_payload.json
+  aws s3api delete-objects --bucket "$BUCKET" --delete file:///tmp/delete_payload.json
+  cd aws_bootstrap && terraform destroy
+  ```
+
+  正しいdestroy順序（`aws_tf` → `aws_bootstrap`）を守っていれば、この時点で`aws_tf.tfstate`の中身自体はもう使わない状態になっているので、バージョンごと消して問題ない。
