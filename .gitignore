@@ -14,3 +14,6 @@ override.tf.json
 
 # Local tooling
 .claude/
+
+# Open WebUI local integration (contains a LiteLLM virtual key + DB password)
+localtest_openwebui/.env
