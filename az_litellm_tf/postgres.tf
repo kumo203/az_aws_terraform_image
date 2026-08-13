@@ -1,7 +1,7 @@
 
 resource "azurerm_postgresql_flexible_server" "this" {
   name                = "${var.resource_prefix}-${local.name_suffix}-pg"
-  location            = data.azurerm_resource_group.this.location
+  location            = var.postgres_location
   resource_group_name = data.azurerm_resource_group.this.name
 
   administrator_login    = var.postgres_admin_username
@@ -20,6 +20,13 @@ resource "azurerm_postgresql_flexible_server" "this" {
 
   # Left unpinned so Azure can place the server in whichever zone has
   # capacity for the Burstable SKU, avoiding zone-specific capacity failures.
+  # azurerm then reads back whatever zone Azure picked and reports it as
+  # permanent drift on every subsequent plan (the provider only allows
+  # changing `zone` via a high_availability standby-zone exchange, which this
+  # single-instance server doesn't have), so ignore it here.
+  lifecycle {
+    ignore_changes = [zone]
+  }
 }
 
 resource "azurerm_postgresql_flexible_server_database" "litellm" {
