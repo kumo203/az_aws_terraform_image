@@ -2,12 +2,15 @@
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_key_vault" "this" {
-  name                       = "${var.resource_prefix}-${local.name_suffix}-kv"
+  # Key Vault names are capped at 24 chars, so this can't follow the usual
+  # "${resource_prefix}-${suffix}-kv" pattern (would overflow) - matches the
+  # shorter name actually deployed.
+  name                       = "kv-litellm-${local.name_suffix}"
   location                   = data.azurerm_resource_group.this.location
   resource_group_name        = data.azurerm_resource_group.this.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
   sku_name                   = var.key_vault_sku_name
-  enable_rbac_authorization  = true
+  rbac_authorization_enabled = true
   purge_protection_enabled   = var.key_vault_purge_protection_enabled
   soft_delete_retention_days = 7
 }

@@ -119,6 +119,12 @@ DATABASE_URL=$openWebUiDbUrl
 OPENAI_API_BASE_URL=$gateway/v1
 OPENAI_API_KEY=$virtualKey
 WEBUI_SECRET_KEY=$webuiSecretKey
+
+# LiteLLM Container App is min_replicas=0 (scale-to-zero); a cold start can take
+# tens of seconds, but Open WebUI's default model-list fetch timeout is only 10s,
+# so the Models page shows "No models found" until something else warms it up
+# first. Give it real headroom.
+AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST=60
 "@
 # Windows PowerShell 5.1's `-Encoding utf8` always writes a UTF-8 BOM, which
 # breaks naive KEY=VALUE parsing (e.g. `export $(xargs) < .env`) on the first
