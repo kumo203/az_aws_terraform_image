@@ -3,8 +3,8 @@
 # file before applying az_litellm_tf/. Same shared resource group as az_tf/ —
 # variables.tf's resource_prefix default ("ai-prj-litellm") already differs
 # from az_tf/'s ("ai-prj-sample") so resource names don't collide within it.
-resource_group_name = "ai-prj-sample-5b2e176d-rg"
-name_suffix         = "5b2e176d"
+resource_group_name = "REPLACE_WITH_bootstrap_output_resource_group_name"
+name_suffix         = "REPLACE_WITH_bootstrap_output_name_suffix"
 
 # Verify the current stable release tag at https://github.com/berriai/litellm/pkgs/container/litellm-database
 # before applying — never use `latest`/`main-latest` (see variables.tf).
