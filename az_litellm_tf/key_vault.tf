@@ -2,11 +2,9 @@
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_key_vault" "this" {
-  # Key Vault names allow only 3-24 chars, too short for the
-  # "${var.resource_prefix}-${local.name_suffix}-kv" pattern used elsewhere in
-  # this module ("ai-prj-litellm-<suffix>-kv" is 26 chars), so this uses a
-  # short fixed prefix instead of var.resource_prefix (same reasoning as
-  # bootstrap/main.tf's storage account name).
+  # Key Vault names are capped at 24 chars, so this can't follow the usual
+  # "${resource_prefix}-${suffix}-kv" pattern (would overflow) - matches the
+  # shorter name actually deployed.
   name                       = "kv-litellm-${local.name_suffix}"
   location                   = data.azurerm_resource_group.this.location
   resource_group_name        = data.azurerm_resource_group.this.name
