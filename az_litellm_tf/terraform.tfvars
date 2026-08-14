@@ -8,4 +8,10 @@ name_suffix         = "REPLACE_WITH_bootstrap_output_name_suffix"
 
 # Verify the current stable release tag at https://github.com/berriai/litellm/pkgs/container/litellm-database
 # before applying — never use `latest`/`main-latest` (see variables.tf).
-litellm_image_tag = "REPLACE_WITH_verified_litellm-database_tag"
+litellm_image_tag = "main-v1.83.14-stable"
+
+# Ad hoc psql access for verifying Prisma table creation etc. Uncomment and
+# replace with your current local/workstation IP when needed, then comment
+# out again (or apply with an empty list) once done — do not leave a real IP
+# committed here.
+# postgres_admin_source_ip_ranges = ["0.0.0.0"]

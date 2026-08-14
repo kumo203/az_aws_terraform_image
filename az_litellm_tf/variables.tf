@@ -14,6 +14,17 @@ variable "location" {
   default     = "eastus2"
 }
 
+# This subscription has Postgres Flexible Server provisioning restricted in
+# eastus2 (Microsoft.DBforPostgreSQL location capabilities report
+# restricted=Enabled, supportedServerVersions=[] there), so the Postgres
+# server alone is pinned to a region where it isn't restricted. Everything
+# else in this module stays in var.location.
+variable "postgres_location" {
+  description = "Azure region for the Postgres Flexible Server (separate from var.location due to a subscription-level provisioning restriction on Postgres Flexible Server in eastus2)"
+  type        = string
+  default     = "japaneast"
+}
+
 # The following two variables are produced by `terraform output` in bootstrap/
 # after `terraform apply` there; copy them into terraform.tfvars before
 # applying this module. They have no default because a fresh value is
@@ -158,13 +169,15 @@ variable "litellm_max_replicas" {
 variable "litellm_container_cpu" {
   description = "vCPU allocated to the LiteLLM container"
   type        = number
-  default     = 0.5
+  # 0.5/1Gi OOM-killed the litellm-database image on startup (Prisma client
+  # generation + STORE_MODEL_IN_DB=True need more headroom than that).
+  default = 1.0
 }
 
 variable "litellm_container_memory" {
   description = "Memory allocated to the LiteLLM container"
   type        = string
-  default     = "1Gi"
+  default     = "2Gi"
 }
 
 variable "litellm_target_port" {
