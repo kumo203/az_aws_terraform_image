@@ -84,17 +84,13 @@ APIMと違い、モデル・チーム・仮想キーの設定はTerraformでは�
 ```bash
 GATEWAY=$(terraform output -raw litellm_gateway_url)
 MASTER_KEY=$(terraform output -raw litellm_master_key)
-FOUNDRY_ENDPOINT=$(terraform output -raw foundry_endpoint)
-FOUNDRY_KEY=$(terraform output -raw foundry_api_key)
-API_VERSION=$(terraform output -raw foundry_api_version)
 
 # 1) ヘルスチェック（スケールtoゼロからのコールドスタートを考慮しリトライ）
 curl "$GATEWAY/health/liveliness"
 
-# 2) Azureモデルを登録（3デプロイ分、繰り返す）
-curl -X POST "$GATEWAY/model/new" \
-  -H "Authorization: Bearer $MASTER_KEY" -H "Content-Type: application/json" \
-  -d "{\"model_name\": \"gpt-5.6-luna\", \"litellm_params\": {\"model\": \"azure/gpt-5.6-luna\", \"api_base\": \"$FOUNDRY_ENDPOINT\", \"api_key\": \"$FOUNDRY_KEY\", \"api_version\": \"$API_VERSION\"}}"
+# 2) モデル一覧を確認（model_deployments全件がconfig.yaml経由で自動登録済みのはず。
+#    /model/new での手動登録は不要 — 「詰まりどころ」参照）
+curl "$GATEWAY/v1/models" -H "Authorization: Bearer $MASTER_KEY"
 
 # 3) チーム作成 → 仮想キー発行
 curl -X POST "$GATEWAY/team/new" \
@@ -139,6 +135,7 @@ terraform destroy   # az_tf/も含め、他に依存するstateが残ってい�
 - **Cognitive Servicesの論理削除**: `az_tf/README.md`と同じ注意。`az cognitiveservices account purge`で対処。
 - **Key Vaultの論理削除**: `key_vault_purge_protection_enabled=false`のままdestroyすると、Key Vaultはsoft-delete状態で7日間残る。同名で再作成しようとするとエラーになる場合は`az keyvault purge --name <name> --location <loc>`で完全削除。
 - **`litellm-database`イメージが必須**: 無印`litellm`イメージでは`STORE_MODEL_IN_DB=True`利用時にPrismaクライアントが同梱されておらず起動時マイグレーションが失敗する。
+- **`/model/new`はDBに永続化されない**: `STORE_MODEL_IN_DB=True`でも実機検証したところ`/model/new`で登録したモデルは`LiteLLM_Config`テーブルに書き込まれず、次のコールドスタート（`min_replicas=0`からの再起動）やリビジョン再作成で消えていた。そのため`container_apps.tf`では動的登録に頼らず、`var.model_deployments`から`config.yaml`を静的に生成して`LITELLM_CONFIG_B64`環境変数経由でコンテナ起動時に読み込ませている（`api_key`はyaml内に生値を書かず`os.environ/FOUNDRY_API_KEY`参照）。モデル追加/変更は`terraform.tfvars`の`model_deployments`を編集して`apply`し直すことで反映される。
 - **コールドスタートのレイテンシ**: `min_replicas=0`のためアイドル後の最初のリクエストはコンテナ起動＋Prisma初期化＋Postgres初回接続が重なり数十秒かかることがある。`container_apps.tf`のprobe閾値は実測後に調整すること。
 - **Postgresファイアウォールの「Azureサービス許可」ルール**: `postgres.tf`の`allow_azure_services`（`0.0.0.0`/`0.0.0.0`）は同一Azureテナント外のリソースからの接続試行も（資格情報が必要とはいえ）許してしまう。VNet/プライベートエンドポイントを使わないコスト最優先の設計上のトレードオフとして許容している。
 - **GitHub Copilot CLIの`/openai/v1/...`パス仕様は未検証**: `az_tf/README.md`に記載の通り、Copilot CLIの`azure`プロバイダは常に`{host}/openai/v1/chat/completions`を叩く。LiteLLMの標準ルートが同じパスに応答するかは未確認のため、`copilot --log-level debug`で実際のリクエストパスを確認し、`COPILOT_PROVIDER_TYPE`が`azure`のままで良いか（あるいは`openai`にすべきか）を検証すること。
