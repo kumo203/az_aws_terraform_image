@@ -1,13 +1,14 @@
 
-# LiteLLM's /model/new + STORE_MODEL_IN_DB=True does not actually persist
-# registrations (verified against the real deployment: LiteLLM_Config stayed
-# empty in Postgres even right after a "Model added successfully" response),
-# so every model disappeared on the next cold start (min_replicas=0) or
-# revision recreate. Bake model_list into a static config.yaml instead, passed
-# in base64 via LITELLM_CONFIG_B64 and loaded with `litellm --config` on every
-# container start (see the container block's command/args below). api_key is
-# an os.environ reference, not a literal secret, so this is safe to keep in a
-# plain (non-secret) env var.
+# /model/new + STORE_MODEL_IN_DB=True DB persistence was confirmed broken
+# against the (now old) main-v1.26.13 image, but re-verified working against
+# main-v1.83.14-stable — it was a version gap, not a real LiteLLM bug. We
+# still bake model_list into a static config.yaml here deliberately, so a bare
+# `terraform apply` fully provisions the model list without ever depending on
+# DB-registration behavior or requiring a manual /model/new call afterward.
+# Passed in base64 via LITELLM_CONFIG_B64 and loaded with `litellm --config`
+# on every container start (see the container block's command/args below).
+# api_key is an os.environ reference, not a literal secret, so this is safe to
+# keep in a plain (non-secret) env var.
 locals {
   litellm_config = {
     model_list = [
