@@ -18,9 +18,23 @@ terraform init
 terraform apply
 ```
 
+```powershell
+Set-Location bootstrap
+terraform init
+terraform apply
+```
+
 出力される3つの値を控える。
 
 ```bash
+terraform output
+# resource_group_name  = "ai-prj-sample-<suffix>-rg"
+# name_suffix          = "<suffix>"
+# storage_account_name = "aiprj<suffix>tfstate"
+# container_name       = "tfstate"
+```
+
+```powershell
 terraform output
 # resource_group_name  = "ai-prj-sample-<suffix>-rg"
 # name_suffix          = "<suffix>"
@@ -59,6 +73,12 @@ terraform init -backend-config=backend.hcl
 terraform apply
 ```
 
+```powershell
+Set-Location az_tf
+terraform init -backend-config=backend.hcl
+terraform apply
+```
+
 APIM（Consumption tier）の作成には数分かかる。
 
 ## 適用前に確認するTodo
@@ -82,6 +102,18 @@ export COPILOT_MODEL="gpt-5.6-luna"   # gpt-5.6-terra / gpt-5.6-sol にも変更
 copilot -p "hello" --allow-all-tools
 ```
 
+```powershell
+$GATEWAY = terraform output -raw apim_gateway_url
+$KEY = (terraform output -json apim_subscription_keys | ConvertFrom-Json).'team-alpha'
+
+$env:COPILOT_PROVIDER_BASE_URL = $GATEWAY
+$env:COPILOT_PROVIDER_TYPE = "azure"
+$env:COPILOT_PROVIDER_API_KEY = $KEY
+$env:COPILOT_MODEL = "gpt-5.6-luna"   # gpt-5.6-terra / gpt-5.6-sol にも変更可
+
+copilot -p "hello" --allow-all-tools
+```
+
 PowerShell用に整形済みのコマンド（BASE_URL/API_KEY/TYPE/MODELの4つ）は `terraform output -json copilot_cli_powershell` から取得できる（teamごと、sensitive）。BYOK設定を入れるとそのセッションはGitHubホスト型モデルには繋がらなくなる点に注意。
 
 ## 権限について
@@ -96,6 +128,13 @@ PowerShell用に整形済みのコマンド（BASE_URL/API_KEY/TYPE/MODELの4つ
 cd az_tf
 terraform destroy   # 先に本体を全部消す
 cd ../bootstrap
+terraform destroy   # 最後にtfstate用インフラを消す
+```
+
+```powershell
+Set-Location az_tf
+terraform destroy   # 先に本体を全部消す
+Set-Location ..\bootstrap
 terraform destroy   # 最後にtfstate用インフラを消す
 ```
 
