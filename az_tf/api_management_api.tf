@@ -99,6 +99,22 @@ resource "azurerm_api_management_api_operation" "v1_embeddings" {
   }
 }
 
+resource "azurerm_api_management_api_operation" "v1_responses" {
+  operation_id        = "v1-responses"
+  api_name            = azurerm_api_management_api.aoai.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = data.azurerm_resource_group.this.name
+  display_name        = "Responses (v1, model-in-body)"
+  method              = "POST"
+  url_template        = "/openai/v1/responses"
+
+  request {
+    representation {
+      content_type = "application/json"
+    }
+  }
+}
+
 resource "azurerm_api_management_api_policy" "aoai" {
   api_name            = azurerm_api_management_api.aoai.name
   api_management_name = azurerm_api_management.this.name
